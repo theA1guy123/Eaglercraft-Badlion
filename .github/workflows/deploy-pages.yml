@@ -1,0 +1,81 @@
+name: Deploy to GitHub Pages
+
+# Builds the EaglercraftX TeaVM JavaScript client and publishes the
+# playable web client to GitHub Pages.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/sharp-hypatia-s1xruj
+  workflow_dispatch:
+
+# Allow GITHUB_TOKEN to deploy to Pages and cancel superseded runs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build TeaVM JavaScript client
+        run: ./gradlew target_teavm_javascript:makeMainOfflineDownload --no-daemon --console=plain
+
+      - name: Assemble Pages site
+        run: |
+          set -eux
+          SRC="target_teavm_javascript/javascript"
+          SITE="_site"
+          rm -rf "$SITE"
+          mkdir -p "$SITE"
+          # Playable multi-file client (index.html loads classes.js + assets.epk + lang/)
+          cp "$SRC/index.html"   "$SITE/"
+          cp "$SRC/classes.js"   "$SITE/"
+          cp "$SRC/assets.epk"   "$SITE/"
+          cp "$SRC/favicon.png"  "$SITE/"
+          cp -r "$SRC/lang"      "$SITE/lang"
+          # Source map (optional, helps debugging if present)
+          [ -f "$SRC/classes.js.map" ] && cp "$SRC/classes.js.map" "$SITE/" || true
+          # Single-file offline downloads (self-contained), served as extras
+          [ -f "$SRC/EaglercraftX_1.8_Offline_en_US.html" ] && cp "$SRC/EaglercraftX_1.8_Offline_en_US.html" "$SITE/" || true
+          [ -f "$SRC/EaglercraftX_1.8_Offline_International.html" ] && cp "$SRC/EaglercraftX_1.8_Offline_International.html" "$SITE/" || true
+          ls -la "$SITE"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
