@@ -50,14 +50,26 @@ jobs:
           SITE="_site"
           rm -rf "$SITE"
           mkdir -p "$SITE"
-          # Playable multi-file client (index.html loads classes.js + assets.epk + lang/)
+
+          # Static files that ship as-is (committed under javascript/).
           cp "$SRC/index.html"   "$SITE/"
-          cp "$SRC/classes.js"   "$SITE/"
-          cp "$SRC/assets.epk"   "$SITE/"
           cp "$SRC/favicon.png"  "$SITE/"
           cp -r "$SRC/lang"      "$SITE/lang"
-          # Source map (optional, helps debugging if present)
-          [ -f "$SRC/classes.js.map" ] && cp "$SRC/classes.js.map" "$SITE/" || true
+
+          # TeaVM output location can vary; locate classes.js wherever it landed.
+          echo "Searching for build outputs..."
+          find target_teavm_javascript -type f \( -name 'classes.js' -o -name 'classes.js.map' -o -name 'assets.epk' \) -printf '%p\t%s bytes\n'
+
+          JS_SRC="$(find target_teavm_javascript -type f -name 'classes.js' | head -1)"
+          test -n "$JS_SRC"
+          cp "$JS_SRC" "$SITE/classes.js"
+          if [ -f "${JS_SRC}.map" ]; then cp "${JS_SRC}.map" "$SITE/classes.js.map"; fi
+
+          EPK_SRC="$(find target_teavm_javascript -type f -name 'assets.epk' | head -1)"
+          test -n "$EPK_SRC"
+          cp "$EPK_SRC" "$SITE/assets.epk"
+
+          echo "Final site contents:"
           ls -la "$SITE"
 
       - name: Setup Pages
