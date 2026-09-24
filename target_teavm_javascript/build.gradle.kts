@@ -1,4 +1,3 @@
-import com.resentclient.oss.eaglercraft.build.impl.js
 import org.teavm.gradle.api.OptimizationLevel
 import org.teavm.gradle.tasks.GenerateJavaScriptTask
 
@@ -11,8 +10,6 @@ buildscript {
 plugins {
 	id("java")
 	id("org.teavm") version "0.9.2"
-
-	id("com.resentclient.oss.eaglercraft.build") version "0.0.0"
 }
 
 java {
@@ -47,7 +44,7 @@ val jsFileName = "classes.js"
 teavm.js {
 	obfuscated = true
 	sourceMap = true
-	targetFileName = "../$jsFileName"
+	targetFileName = jsFileName
 	optimization = OptimizationLevel.BALANCED // Change to "AGGRESSIVE" for release
 	outOfProcess = false
 	fastGlobalAnalysis = false
@@ -92,21 +89,31 @@ tasks.named<GenerateJavaScriptTask>("generateJavaScript") {
 	}
 }
 
-eaglercraftBuild {
-	suites {
-		js("main") {
-			sourceGeneratorOutput = file("$jsFolder/$jsFileName")
-			offlineDownloadTemplate = file("javascript/OfflineDownloadTemplate.txt")
-			mainOutput = file("$jsFolder/EaglercraftX_1.8_Offline_en_US.html")
-			internationalOutput = file("$jsFolder/EaglercraftX_1.8_Offline_International.html")
-		}.apply {
-			epkSources = file("../desktopRuntime/resources")
-			epkOutput = file("$jsFolder/assets.epk")
+// Build the assets.epk resource pack from the shared desktop resources using
+// the bundled CompileEPK tool. The web client's EPKLoader requires the first
+// entry to be a HEAD block with file-type "epk/resources".
+val compileAssetsEpk = tasks.register<JavaExec>("compileAssetsEpk") {
+	group = "build"
+	description = "Packs desktopRuntime/resources into javascript/assets.epk"
+	val epkSources = file("../desktopRuntime/resources")
+	val epkOutput = file("$jsFolder/assets.epk")
+	inputs.dir(epkSources)
+	outputs.file(epkOutput)
+	classpath = files("buildtools/CompileEPK.jar")
+	mainClass.set("CompilePackage")
+	args(
+		epkSources.absolutePath,
+		epkOutput.absolutePath,
+		"gzip",
+		"epk/resources"
+	)
+}
 
-			languageMetadataInput = file("$jsFolder/lang")
-			languageEpkOutput = file("$jsFolder/lang.tmp.epk")
-
-			sourceGeneratorTaskName = "generateJavaScript"
-		}
-	}
+// Convenience task: produce everything the GitHub Pages site needs
+// (classes.js + assets.epk). The lang files, index.html and favicon.png
+// are already committed under javascript/.
+tasks.register("assemblePagesClient") {
+	group = "build"
+	description = "Builds classes.js and assets.epk for the web client"
+	dependsOn("generateJavaScript", compileAssetsEpk)
 }

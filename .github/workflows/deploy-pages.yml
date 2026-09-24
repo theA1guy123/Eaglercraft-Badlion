@@ -37,7 +37,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build TeaVM JavaScript client
-        run: ./gradlew target_teavm_javascript:makeMainOfflineDownload --no-daemon --console=plain
+        run: ./gradlew target_teavm_javascript:assemblePagesClient --no-daemon --console=plain --stacktrace
 
       - name: Assemble Pages site
         run: |
@@ -54,9 +54,6 @@ jobs:
           cp -r "$SRC/lang"      "$SITE/lang"
           # Source map (optional, helps debugging if present)
           [ -f "$SRC/classes.js.map" ] && cp "$SRC/classes.js.map" "$SITE/" || true
-          # Single-file offline downloads (self-contained), served as extras
-          [ -f "$SRC/EaglercraftX_1.8_Offline_en_US.html" ] && cp "$SRC/EaglercraftX_1.8_Offline_en_US.html" "$SITE/" || true
-          [ -f "$SRC/EaglercraftX_1.8_Offline_International.html" ] && cp "$SRC/EaglercraftX_1.8_Offline_International.html" "$SITE/" || true
           ls -la "$SITE"
 
       - name: Setup Pages
