@@ -19,4 +19,12 @@ rootProject.name = "eaglercraft-workspace"
 
 include("target_lwjgl_desktop")
 include("target_teavm_javascript")
-include("target_teavm_wasm_gc")
+
+// The WASM-GC target depends on the unpublished
+// com.resentclient.oss.eaglercraft.build plugin, which is not available in any
+// reachable Maven repository. Building only the JS web client (e.g. the GitHub
+// Pages workflow) must not fail while Gradle configures this project, so allow
+// opting out of it with EAGLER_SKIP_WASM.
+if (System.getenv("EAGLER_SKIP_WASM").isNullOrEmpty()) {
+	include("target_teavm_wasm_gc")
+}

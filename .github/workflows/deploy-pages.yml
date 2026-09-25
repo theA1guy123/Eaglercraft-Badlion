@@ -1,0 +1,94 @@
+name: Deploy to GitHub Pages
+
+# Builds the EaglercraftX TeaVM JavaScript client and publishes the
+# playable web client to GitHub Pages.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/sharp-hypatia-s1xruj
+  workflow_dispatch:
+
+# Allow GITHUB_TOKEN to deploy to Pages and cancel superseded runs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build TeaVM JavaScript client
+        env:
+          # The WASM-GC target needs an unpublished Gradle plugin; skip it so
+          # Gradle can configure and build only the JS web client.
+          EAGLER_SKIP_WASM: '1'
+        run: ./gradlew target_teavm_javascript:assemblePagesClient --no-daemon --console=plain --stacktrace
+
+      - name: Assemble Pages site
+        run: |
+          set -eux
+          SRC="target_teavm_javascript/javascript"
+          SITE="_site"
+          rm -rf "$SITE"
+          mkdir -p "$SITE"
+
+          # Static files that ship as-is (committed under javascript/).
+          cp "$SRC/index.html"   "$SITE/"
+          cp "$SRC/favicon.png"  "$SITE/"
+          cp -r "$SRC/lang"      "$SITE/lang"
+
+          # TeaVM output location can vary; locate classes.js wherever it landed.
+          echo "Searching for build outputs..."
+          find target_teavm_javascript -type f \( -name 'classes.js' -o -name 'classes.js.map' -o -name 'assets.epk' \) -printf '%p\t%s bytes\n'
+
+          JS_SRC="$(find target_teavm_javascript -type f -name 'classes.js' | head -1)"
+          test -n "$JS_SRC"
+          cp "$JS_SRC" "$SITE/classes.js"
+          if [ -f "${JS_SRC}.map" ]; then cp "${JS_SRC}.map" "$SITE/classes.js.map"; fi
+
+          EPK_SRC="$(find target_teavm_javascript -type f -name 'assets.epk' | head -1)"
+          test -n "$EPK_SRC"
+          cp "$EPK_SRC" "$SITE/assets.epk"
+
+          echo "Final site contents:"
+          ls -la "$SITE"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
